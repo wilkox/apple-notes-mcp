@@ -25,7 +25,21 @@ export function fileConfigPath(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /**
- * Merge a JSON config file's string values into `env` for keys not already set.
+ * Keys this loader is willing to set. The config file is an on-disk input the
+ * host app does not manage, so it must not be able to reach arbitrary process
+ * environment variables: a file that could set PATH, NODE_OPTIONS or
+ * DYLD_INSERT_LIBRARIES would decide what this server executes and loads. Only
+ * this server's own namespace plus the two debug switches it reads are merged,
+ * and anything else is skipped silently, because an unrecognised key in a
+ * hand-edited config file is not an error worth failing the server over.
+ */
+function isMergeableKey(key: string): boolean {
+  return key.startsWith("APPLE_NOTES_MCP_") || key === "DEBUG" || key === "VERBOSE";
+}
+
+/**
+ * Merge a JSON config file's string values into `env` for keys not already set,
+ * restricted to the keys `isMergeableKey` admits.
  * Returns the keys applied. Tolerates a missing/corrupt file.
  */
 export function loadFileConfig(
@@ -38,6 +52,7 @@ export function loadFileConfig(
     const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
     if (!parsed || typeof parsed !== "object") return applied;
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!isMergeableKey(k)) continue;
       if (typeof v !== "string") continue;
       if (env[k] === undefined || env[k] === "") {
         env[k] = v;

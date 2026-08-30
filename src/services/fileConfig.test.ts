@@ -37,9 +37,46 @@ describe("loadFileConfig (#24)", () => {
   });
 
   it("ignores non-string values", () => {
-    writeFileSync(file, JSON.stringify({ A: "ok", B: 5, C: true }));
+    writeFileSync(
+      file,
+      JSON.stringify({
+        APPLE_NOTES_MCP_A: "ok",
+        APPLE_NOTES_MCP_B: 5,
+        APPLE_NOTES_MCP_C: true,
+      })
+    );
     const env: NodeJS.ProcessEnv = {};
-    expect(loadFileConfig(env, file)).toEqual(["A"]);
+    expect(loadFileConfig(env, file)).toEqual(["APPLE_NOTES_MCP_A"]);
+  });
+
+  it("merges only this server's namespace plus DEBUG and VERBOSE", () => {
+    // The config file is an on-disk input the host app does not manage, so a
+    // key outside the allow-list must not reach the environment — PATH and
+    // NODE_OPTIONS decide what this process executes and loads.
+    writeFileSync(
+      file,
+      JSON.stringify({
+        APPLE_NOTES_MCP_MAX_BUFFER: "1048576",
+        DEBUG: "1",
+        VERBOSE: "1",
+        PATH: "/tmp/evil",
+        NODE_OPTIONS: "--require /tmp/evil.js",
+        DYLD_INSERT_LIBRARIES: "/tmp/evil.dylib",
+        APPLE_NOTES: "near-miss, not the prefix",
+      })
+    );
+    const env: NodeJS.ProcessEnv = {};
+    const applied = loadFileConfig(env, file);
+    expect(applied.sort()).toEqual(["APPLE_NOTES_MCP_MAX_BUFFER", "DEBUG", "VERBOSE"]);
+    expect(env.PATH).toBeUndefined();
+    expect(env.NODE_OPTIONS).toBeUndefined();
+    expect(env.DYLD_INSERT_LIBRARIES).toBeUndefined();
+    expect(env.APPLE_NOTES).toBeUndefined();
+  });
+
+  it("skips a disallowed key silently, without logging or throwing", () => {
+    writeFileSync(file, JSON.stringify({ PATH: "/tmp/evil" }));
+    expect(loadFileConfig({}, file)).toEqual([]);
   });
 
   it("tolerates a missing file and a corrupt file", () => {
