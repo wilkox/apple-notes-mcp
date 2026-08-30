@@ -1037,7 +1037,7 @@ Saves a note attachment to disk.
 |-----------|------|----------|-------------|
 | `noteId` | string | Yes | CoreData note ID (from `search-notes`/`list-notes`) |
 | `attachmentId` | string | Yes | Attachment ID (from `list-attachments`) |
-| `savePath` | string | Yes | Absolute destination file path. Must be under your home directory, a temp directory, or `/Volumes` |
+| `savePath` | string | Yes | Absolute destination file path. Must be under `~/Downloads` or a temp directory |
 
 **Returns:** Confirmation with the saved path, name, and content type (also in `structuredContent`).
 

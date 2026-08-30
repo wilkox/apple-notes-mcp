@@ -22,16 +22,26 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { homedir, tmpdir } from "os";
 
 /**
- * Roots an attachment may be written to. `/private/tmp` is listed alongside
- * `/tmp` because macOS's `/tmp` is a symlink to it: a caller that passes the
- * resolved real path must not be rejected while the symlinked spelling of the
- * same directory is accepted (the same reason `/private/var/folders` is here).
+ * Roots an attachment may be written to: the user's Downloads folder and the
+ * temp directories.
+ *
+ * The destination is chosen by whatever is driving this server, so the roots
+ * are the places a written file cannot do harm. The whole of `$HOME` is not one
+ * of them — it holds `~/.ssh`, `~/.zshrc`, `~/Library/LaunchAgents` and every
+ * other file that turns a write into an execution — and neither is `/Volumes`,
+ * where an external or network mount can be somebody else's filesystem.
+ * Downloads is the conventional landing place for a file arriving from
+ * elsewhere, which is exactly what a saved attachment is.
+ *
+ * `/private/tmp` is listed alongside `/tmp` because macOS's `/tmp` is a symlink
+ * to it: a caller that passes the resolved real path must not be rejected while
+ * the symlinked spelling of the same directory is accepted (the same reason
+ * `/private/var/folders` is here).
  */
 export function allowedSaveRoots(): string[] {
   return [
-    resolve(homedir()),
+    join(resolve(homedir()), "Downloads"),
     resolve(tmpdir()),
-    "/Volumes",
     "/private/var/folders",
     "/tmp",
     "/private/tmp",
@@ -163,7 +173,9 @@ export function assertSafeSavePath(p: string, roots: string[] = allowedSaveRoots
   if (!isAbsolute(p)) throw new Error(`Destination path must be absolute: "${p}"`);
   const abs = resolve(p);
   if (!isWithinRoots(abs, roots)) {
-    throw new Error(`Refusing to write outside allowed locations (home, temp, /Volumes): "${abs}"`);
+    throw new Error(
+      `Refusing to write outside allowed locations (~/Downloads or a temp directory): "${abs}"`
+    );
   }
 
   const ancestor = deepestExistingAncestor(abs);
@@ -180,14 +192,16 @@ export function assertSafeSavePath(p: string, roots: string[] = allowedSaveRoots
 
   const suffix = relative(ancestor, abs);
   if (suffix.split(sep).includes("..")) {
-    throw new Error(`Refusing to write outside allowed locations (home, temp, /Volumes): "${abs}"`);
+    throw new Error(
+      `Refusing to write outside allowed locations (~/Downloads or a temp directory): "${abs}"`
+    );
   }
   const canonicalDest = suffix ? join(canonicalAncestor, suffix) : canonicalAncestor;
 
   const allowed = canonicalRoots(roots);
   if (!isWithinRoots(canonicalAncestor, allowed) || !isWithinRoots(canonicalDest, allowed)) {
     throw new Error(
-      `Refusing to write outside allowed locations (home, temp, /Volumes): "${abs}" ` +
+      `Refusing to write outside allowed locations (~/Downloads or a temp directory): "${abs}" ` +
         `resolves to "${canonicalDest}" through a symbolic link.`
     );
   }

@@ -26,7 +26,7 @@ const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach(cleanupTempDir));
 
 describe("assertSafeSavePath (#27)", () => {
-  it("accepts absolute paths under the temp dir and home dir", () => {
+  it("accepts absolute paths under the temp dir and ~/Downloads", () => {
     const p = join(tmpdir(), "x.png");
     expect(assertSafeSavePath(p)).toBe(p);
     const h = join(homedir(), "Downloads", "x.png");
@@ -52,8 +52,23 @@ describe("assertSafeSavePath (#27)", () => {
     );
   });
 
-  it("exposes the allowed roots", () => {
-    expect(allowedSaveRoots()).toEqual(expect.arrayContaining(["/Volumes"]));
+  it("exposes the allowed roots: ~/Downloads and the temp dirs, not $HOME or /Volumes", () => {
+    const roots = allowedSaveRoots();
+    expect(roots).toEqual(
+      expect.arrayContaining([join(homedir(), "Downloads"), "/private/tmp", "/tmp"])
+    );
+    // The whole home directory and /Volumes are deliberately NOT roots: a write
+    // anywhere in $HOME reaches ~/.ssh and ~/Library/LaunchAgents, and /Volumes
+    // is whatever happens to be mounted.
+    expect(roots).not.toContain("/Volumes");
+    expect(roots).not.toContain(homedir());
+  });
+
+  it("refuses a home-directory path outside Downloads", () => {
+    expect(() => assertSafeSavePath(join(homedir(), "Library", "x.png"))).toThrow(
+      /outside allowed/
+    );
+    expect(() => assertSafeSavePath("/Volumes/somedisk/x.png")).toThrow(/outside allowed/);
   });
 });
 

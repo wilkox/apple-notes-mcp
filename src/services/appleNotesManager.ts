@@ -2945,7 +2945,7 @@ export class AppleNotesManager {
    *
    * @param noteId - CoreData URL identifier for the note
    * @param attachmentId - id of the attachment (from list-attachments)
-   * @param savePath - absolute destination file path (within home / temp / /Volumes)
+   * @param savePath - absolute destination file path (within ~/Downloads or a temp dir)
    * @returns { success, savedPath?, name?, contentType?, error? }
    */
   saveAttachmentById(
