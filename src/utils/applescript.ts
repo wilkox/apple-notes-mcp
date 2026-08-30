@@ -426,7 +426,8 @@ export function executeAppleScript(
       // script from stdin: a shell-escaping bug can never become shell
       // execution, and a huge generated script (large note bodies) can't
       // blow the kernel's argv size limit the old `-e '<script>'` form had.
-      const output = execFileSync("osascript", ["-"], {
+      // The path is absolute so PATH is not an input to what gets executed.
+      const output = execFileSync("/usr/bin/osascript", ["-"], {
         input: preparedScript,
         encoding: "utf8",
         timeout: attemptTimeoutMs,

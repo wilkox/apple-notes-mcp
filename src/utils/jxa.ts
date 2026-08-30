@@ -119,8 +119,9 @@ export function executeJXA(script: string, options: JXAOptions = {}): JXAResult 
   try {
     // osascript is invoked directly (no /bin/sh) and reads the script from
     // stdin, so no shell escaping is needed and script size isn't bounded by
-    // the kernel's argv limit.
-    const output = execFileSync("osascript", ["-l", "JavaScript", "-"], {
+    // the kernel's argv limit. The path is absolute so PATH is not an input to
+    // what gets executed.
+    const output = execFileSync("/usr/bin/osascript", ["-l", "JavaScript", "-"], {
       input: script.trim(),
       encoding: "utf8",
       timeout: timeoutMs,
