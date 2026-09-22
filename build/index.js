@@ -39169,7 +39169,7 @@ function executeAppleScript(script, options = {}) {
     const preparedScript = wrapWithTimeout(script.trim(), attemptTimeoutMs);
     const attemptStart = Date.now();
     try {
-      const output = execFileSync("osascript", ["-"], {
+      const output = execFileSync("/usr/bin/osascript", ["-"], {
         input: preparedScript,
         encoding: "utf8",
         timeout: attemptTimeoutMs,
@@ -39340,7 +39340,7 @@ var NOTES_DB_PATH = path.join(
 function hasFullDiskAccess() {
   try {
     if (!fs.existsSync(NOTES_DB_PATH)) return false;
-    execFileSync2("sqlite3", ["-readonly", NOTES_DB_PATH, "SELECT 1;"], {
+    execFileSync2("/usr/bin/sqlite3", ["-readonly", NOTES_DB_PATH, "SELECT 1;"], {
       encoding: "utf8",
       timeout: 3e3,
       stdio: ["pipe", "pipe", "pipe"]
@@ -39359,7 +39359,7 @@ function queryNoteData(noteId3) {
   const pk = pkMatch[1];
   const query = `SELECT hex(nd.ZDATA) FROM ZICNOTEDATA nd JOIN ZICCLOUDSYNCINGOBJECT n ON nd.ZNOTE = n.Z_PK WHERE n.Z_PK = ${pk};`;
   try {
-    const result = execFileSync2("sqlite3", ["-readonly", NOTES_DB_PATH, query], {
+    const result = execFileSync2("/usr/bin/sqlite3", ["-readonly", NOTES_DB_PATH, query], {
       encoding: "utf8",
       timeout: 5e3,
       stdio: ["pipe", "pipe", "pipe"]
@@ -39847,9 +39847,8 @@ import { dirname, isAbsolute, join as join3, relative, resolve, sep } from "path
 import { homedir as homedir3, tmpdir } from "os";
 function allowedSaveRoots() {
   return [
-    resolve(homedir3()),
+    join3(resolve(homedir3()), "Downloads"),
     resolve(tmpdir()),
-    "/Volumes",
     "/private/var/folders",
     "/tmp",
     "/private/tmp"
@@ -39905,7 +39904,9 @@ function assertSafeSavePath(p, roots = allowedSaveRoots()) {
   if (!isAbsolute(p)) throw new Error(`Destination path must be absolute: "${p}"`);
   const abs = resolve(p);
   if (!isWithinRoots(abs, roots)) {
-    throw new Error(`Refusing to write outside allowed locations (home, temp, /Volumes): "${abs}"`);
+    throw new Error(
+      `Refusing to write outside allowed locations (~/Downloads or a temp directory): "${abs}"`
+    );
   }
   const ancestor = deepestExistingAncestor(abs);
   if (ancestor === abs && lstatSync(abs).isSymbolicLink()) {
@@ -39919,13 +39920,15 @@ function assertSafeSavePath(p, roots = allowedSaveRoots()) {
   }
   const suffix = relative(ancestor, abs);
   if (suffix.split(sep).includes("..")) {
-    throw new Error(`Refusing to write outside allowed locations (home, temp, /Volumes): "${abs}"`);
+    throw new Error(
+      `Refusing to write outside allowed locations (~/Downloads or a temp directory): "${abs}"`
+    );
   }
   const canonicalDest = suffix ? join3(canonicalAncestor, suffix) : canonicalAncestor;
   const allowed = canonicalRoots(roots);
   if (!isWithinRoots(canonicalAncestor, allowed) || !isWithinRoots(canonicalDest, allowed)) {
     throw new Error(
-      `Refusing to write outside allowed locations (home, temp, /Volumes): "${abs}" resolves to "${canonicalDest}" through a symbolic link.`
+      `Refusing to write outside allowed locations (~/Downloads or a temp directory): "${abs}" resolves to "${canonicalDest}" through a symbolic link.`
     );
   }
   return abs;
@@ -41948,7 +41951,7 @@ var AppleNotesManager = class {
    *
    * @param noteId - CoreData URL identifier for the note
    * @param attachmentId - id of the attachment (from list-attachments)
-   * @param savePath - absolute destination file path (within home / temp / /Volumes)
+   * @param savePath - absolute destination file path (within ~/Downloads or a temp dir)
    * @returns { success, savedPath?, name?, contentType?, error? }
    */
   saveAttachmentById(noteId3, attachmentId, savePath) {
@@ -42491,7 +42494,7 @@ function getSyncStatus(useCache = true) {
       );
     `;
     const result = execFileSync4(
-      "sqlite3",
+      "/usr/bin/sqlite3",
       ["-readonly", NOTES_DB_PATH2, query.replace(/\n/g, " ")],
       {
         encoding: "utf8",
@@ -42570,7 +42573,7 @@ var COLUMN_MAP = [
   { key: "smartFolderQuery", column: "ZSMARTFOLDERQUERYJSON", type: "text" }
 ];
 function runSqlite(query) {
-  return execFileSync5("sqlite3", ["-readonly", NOTES_DB_PATH3, query], {
+  return execFileSync5("/usr/bin/sqlite3", ["-readonly", NOTES_DB_PATH3, query], {
     encoding: "utf8",
     timeout: 5e3,
     stdio: ["pipe", "pipe", "pipe"]
@@ -43408,7 +43411,7 @@ function markdownBridgeDetail() {
 function checkNodeRuntimeSignature() {
   const name = "Node runtime signature";
   try {
-    const r = spawnSync("codesign", ["-dvvv", process.execPath], { encoding: "utf8" });
+    const r = spawnSync("/usr/bin/codesign", ["-dvvv", process.execPath], { encoding: "utf8" });
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     if (r.error || !out.trim()) {
       return {
@@ -43451,6 +43454,9 @@ function fileConfigPath(env = process.env) {
   if (override && override.trim()) return override.trim();
   return join9(homedir7(), "Library", "Application Support", "apple-notes-mcp", "config.json");
 }
+function isMergeableKey(key) {
+  return key.startsWith("APPLE_NOTES_MCP_") || key === "DEBUG" || key === "VERBOSE";
+}
 function loadFileConfig(env = process.env, path4 = fileConfigPath(env)) {
   const applied = [];
   try {
@@ -43458,6 +43464,7 @@ function loadFileConfig(env = process.env, path4 = fileConfigPath(env)) {
     const parsed = JSON.parse(readFileSync2(path4, "utf8"));
     if (!parsed || typeof parsed !== "object") return applied;
     for (const [k, v] of Object.entries(parsed)) {
+      if (!isMergeableKey(k)) continue;
       if (typeof v !== "string") continue;
       if (env[k] === void 0 || env[k] === "") {
         env[k] = v;
@@ -45988,11 +45995,11 @@ registerTool(
 registerTool(
   "save-attachment",
   {
-    description: "Use when: writing one note attachment to a file on disk.\nReturns: the saved path.\nDo not use when: you want the bytes in-memory as base64 (fetch-attachment).\nSafety: writes a file; savePath must be absolute and under the home directory, a temp dir, or /Volumes. Get the ids from list-attachments first.",
+    description: "Use when: writing one note attachment to a file on disk.\nReturns: the saved path.\nDo not use when: you want the bytes in-memory as base64 (fetch-attachment).\nSafety: writes a file; savePath must be absolute and under ~/Downloads or a temp dir. Get the ids from list-attachments first.",
     inputSchema: {
       noteId: external_exports.string().min(1, "noteId is required").max(MAX.ID).describe("CoreData note id (from search/list)"),
       attachmentId: external_exports.string().min(1, "attachmentId is required").max(MAX.ATTACHMENT_ID).describe("Attachment id (from list-attachments)"),
-      savePath: external_exports.string().min(1, "savePath is required").max(MAX.SAVE_PATH).describe("Absolute destination file path (must be under home, temp, or /Volumes)")
+      savePath: external_exports.string().min(1, "savePath is required").max(MAX.SAVE_PATH).describe("Absolute destination file path (must be under ~/Downloads or a temp dir)")
     },
     outputSchema: {
       savedPath: external_exports.string().optional(),
